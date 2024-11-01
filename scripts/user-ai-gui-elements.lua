@@ -33,9 +33,21 @@ function get_playback_percentage()
     return string.format("%.1f%%", position)
 end
 
-function create_ass_header()
+function get_remaining_time()
+    local duration = mp.get_property_number("duration", 0)
+    local position = mp.get_property_number("time-pos", 0)
+    local speed = mp.get_property_number("speed", 1)
+    
+    local remaining_time = duration - position
+    local apparent_remaining_time = remaining_time / speed
+    
+    return string.format("%.0f / %.0f", remaining_time, apparent_remaining_time)
+end
+
+function create_ass_header(alignment)
     return string.format(
-        "{\\a7\\fs%d\\1c&H%s\\b1\\bord2\\3c&H%s\\3a&H%s}",
+        "{\\a%d\\fs%d\\1c&H%s\\b1\\bord2\\3c&H%s\\3a&H%s}",
+        alignment,
         opts.font_size,
         opts.font_color,
         opts.background_color,
@@ -47,19 +59,25 @@ function draw_elements()
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
     
-    -- Draw chapter title (top left)
+    -- Draw chapter title (top left, alignment 7)
     if last_chapter_title ~= "" then
         ass:new_event()
+        ass:append(create_ass_header(7))  -- top left alignment
         ass:pos(opts.margin_x, opts.margin_y)
-        ass:append(create_ass_header())
         ass:append(last_chapter_title)
     end
     
-    -- Draw percentage (top right)
+    -- Draw percentage (bottom right, above remaining time)
     ass:new_event()
-    ass:pos(w - opts.margin_x, opts.margin_y)
-    ass:append(create_ass_header())
+    ass:append(create_ass_header(3))  -- bottom right alignment
+    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size - 5)  -- Position above remaining time
     ass:append(get_playback_percentage())
+    
+    -- Draw remaining time (bottom right)
+    ass:new_event()
+    ass:append(create_ass_header(3))  -- bottom right alignment
+    ass:pos(w - opts.margin_x, h - opts.margin_y)
+    ass:append(get_remaining_time())
     
     -- Update OSD
     mp.set_osd_ass(w, h, ass.text)
