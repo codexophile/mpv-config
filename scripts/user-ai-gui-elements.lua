@@ -41,7 +41,17 @@ function get_remaining_time()
     local remaining_time = duration - position
     local apparent_remaining_time = remaining_time / speed
     
-    return string.format("%.0f / %.0f", remaining_time, apparent_remaining_time)
+    -- Convert to HH:MM:SS format
+    local function format_time(seconds)
+        local hours = math.floor(seconds / 3600)
+        local minutes = math.floor((seconds % 3600) / 60)
+        local secs = math.floor(seconds % 60)
+        return string.format("%02d:%02d:%02d", hours, minutes, secs)
+    end
+    
+    return string.format("%s | %s", 
+        format_time(remaining_time),
+        format_time(apparent_remaining_time))
 end
 
 function create_ass_header(alignment)
