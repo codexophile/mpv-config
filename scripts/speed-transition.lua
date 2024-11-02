@@ -525,7 +525,9 @@ function change_lookAhead(v)
 	msg.info('lookahead:', cfg.lookahead)
 end
 
-mp.add_key_binding('z', 'toggle_speedtrans', toggle)
+mp.register_script_message("toggle_speedtrans", toggle)
+
+-- mp.add_key_binding('z', 'toggle_speedtrans', toggle)
 mp.add_key_binding('alt+j', 'switch_mode', switch_mode)
 mp.add_key_binding('alt++', 'increase_speedup', function() change_speedup(0.1) end, { repeatable = true })
 mp.add_key_binding('alt+-', 'decrease_speedup', function() change_speedup(-0.1) end, { repeatable = true })
