@@ -4,7 +4,7 @@ local assdraw = require 'mp.assdraw'
 
 -- Script options
 local opts = {
-    font_size = 30,
+    font_size = 20,
     font_color = "FFFFFF",
     background_color = "000000",
     background_alpha = "80",
@@ -14,16 +14,13 @@ local opts = {
 }
 options.read_options(opts)
 
--- Initialize variables
-local chapter_timer = nil
-local last_chapter_title = ""
-
 function get_current_chapter_title()
     local chapter_list = mp.get_property_native("chapter-list")
     local current_chapter = mp.get_property_number("chapter")
     
-    if chapter_list and current_chapter and chapter_list[current_chapter + 1] then
-        return chapter_list[current_chapter + 1].title
+    if chapter_list and current_chapter ~= nil and #chapter_list > 0 then
+        -- Always show "Chapter X" since we can see the titles are empty
+        return string.format("Chapter %d / %d", current_chapter + 1, #chapter_list)
     end
     return ""
 end
@@ -41,7 +38,6 @@ function get_remaining_time()
     local remaining_time = duration - position
     local apparent_remaining_time = remaining_time / speed
     
-    -- Convert to HH:MM:SS format
     local function format_time(seconds)
         local hours = math.floor(seconds / 3600)
         local minutes = math.floor((seconds % 3600) / 60)
@@ -69,48 +65,36 @@ function draw_elements()
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
     
-    -- Draw chapter title (top left, alignment 7)
-    if last_chapter_title ~= "" then
-        ass:new_event()
-        ass:append(create_ass_header(7))  -- top left alignment
-        ass:pos(opts.margin_x, opts.margin_y)
-        ass:append(last_chapter_title)
-    end
-    
-    -- Draw percentage (bottom right, above remaining time)
+    -- Draw percentage
     ass:new_event()
-    ass:append(create_ass_header(3))  -- bottom right alignment
-    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size - 5)  -- Position above remaining time
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 2 - 10)
     ass:append(get_playback_percentage())
     
-    -- Draw remaining time (bottom right)
+    -- Draw remaining time
     ass:new_event()
-    ass:append(create_ass_header(3))  -- bottom right alignment
-    ass:pos(w - opts.margin_x, h - opts.margin_y)
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size - 5)
     ass:append(get_remaining_time())
     
-    -- Update OSD
+    -- Draw chapter number
+    local chapter_text = get_current_chapter_title()
+    if chapter_text ~= "" then
+        ass:new_event()
+        ass:append(create_ass_header(3))
+        ass:pos(w - opts.margin_x, h - opts.margin_y)
+        ass:append(chapter_text)
+    end
+    
     mp.set_osd_ass(w, h, ass.text)
 end
 
-function chapter_change(_, current_chapter)
-    if current_chapter then
-        last_chapter_title = get_current_chapter_title()
-        if chapter_timer then
-            chapter_timer:kill()
-        end
-        chapter_timer = mp.add_timeout(opts.chapter_fade_timeout, function()
-            last_chapter_title = ""
-            draw_elements()
-        end)
-    end
+-- Update more frequently to ensure chapter info is always visible
+mp.observe_property("chapter", "number", function(_, current_chapter)
     draw_elements()
-end
+end)
 
--- Register event handlers
-mp.observe_property("chapter", "number", chapter_change)
 mp.observe_property("time-pos", "number", draw_elements)
 mp.register_event("file-loaded", function()
-    last_chapter_title = get_current_chapter_title()
     draw_elements()
 end)
