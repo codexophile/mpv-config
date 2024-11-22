@@ -14,23 +14,7 @@ function toggle_contrast_gamma()
         high_contrast = true
     end
 
-    local brightness = mp.get_property("brightness")
-    local contrast   = mp.get_property("contrast")
-    local gamma      = mp.get_property("gamma")
-    local saturation = mp.get_property("saturation")
-    local hue        = mp.get_property("hue")
-
-    brightness = round_and_pad(brightness, 3)
-    contrast   = round_and_pad(contrast,   3)
-    gamma      = round_and_pad(gamma,      3)
-    saturation = round_and_pad(saturation, 3)
-    hue        = round_and_pad(hue,        3)
-
-    mp.osd_message( "Brightness: " .. brightness .. "\n" ..
-                    "Contrast  : " .. contrast .. "\n" ..
-                    "Gamma     : " .. gamma .. "\n" ..
-                    "Saturation: " .. saturation .. "\n" ..
-                    "Hue       : " .. hue)
+    display_current_display_settings()
     
 end
 
