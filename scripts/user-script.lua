@@ -34,6 +34,26 @@ function toggle_contrast_gamma()
     
 end
 
+function display_current_display_settings()
+    local brightness = mp.get_property("brightness")
+    local contrast   = mp.get_property("contrast")
+    local gamma      = mp.get_property("gamma")
+    local saturation = mp.get_property("saturation")
+    local hue        = mp.get_property("hue")
+
+    brightness = round_and_pad(brightness, 3)
+    contrast   = round_and_pad(contrast,   3)
+    gamma      = round_and_pad(gamma,      3)
+    saturation = round_and_pad(saturation, 3)
+    hue        = round_and_pad(hue,        3)
+
+    mp.osd_message( "Brightness: " .. brightness .. "\n" ..
+                    "Contrast  : " .. contrast .. "\n" ..
+                    "Gamma     : " .. gamma .. "\n" ..
+                    "Saturation: " .. saturation .. "\n" ..
+                    "Hue       : " .. hue)
+end
+
 local function create_toggler(property)
     local original_value = nil
     return function()
@@ -151,6 +171,7 @@ mp.add_key_binding("KP_DEL", "delete_current_file", delete_current_file)
 
 mp.register_script_message("test", test)
 
+mp.register_script_message("display_current_display_settings", display_current_display_settings)
 mp.register_script_message("toggle_contrast_gamma", toggle_contrast_gamma)
 mp.register_script_message("toggle-saturation", create_toggler("saturation"))
 mp.register_script_message("toggle-contrast", create_toggler("contrast"))
