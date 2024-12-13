@@ -3,11 +3,11 @@
 
 local options = {
     -- Threshold for dark scene detection (0-100)
-    darkness_threshold = 30,
+    darkness_threshold = 10,
     
     -- Adjustment values
     dark_contrast = 100,
-    dark_gamma = 5  ,
+    dark_gamma = 1,
     
     -- Default values
     default_contrast = 0,
@@ -24,7 +24,7 @@ local dark_frame_count = 0
 function get_frame_brightness()
     local brightness = mp.get_property_number("estimated-vf-fps")
     if brightness then
-        mp.msg.info("[user_ai_dark_scene_detection] Current brightness: " .. brightness)
+        -- mp.msg.info("[user_ai_dark_scene_detection] Current brightness: " .. brightness)
     end
     return brightness
 end
