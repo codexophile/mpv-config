@@ -144,8 +144,33 @@ function take_custom_screenshot()
     mp.osd_message(string.format("Screenshot saved: %s", screenshot_path))
 end
 
-
 function test()
+end
+
+function resize_to_video()
+    -- Print debug information
+    print("Double-click triggered resize function")
+    
+    local video_width = mp.get_property_number("video-params/w")
+    local video_height = mp.get_property_number("video-params/h")
+    
+    print("Video width: " .. tostring(video_width))
+    print("Video height: " .. tostring(video_height))
+    
+    if video_width and video_height then
+        local success, err = pcall(function()
+            mp.set_property_number("window-width", video_width)
+            mp.set_property_number("window-height", video_height)
+        end)
+        
+        if not success then
+            print("Error setting window size: " .. tostring(err))
+        else
+            print("Window resize successful")
+        end
+    else
+        print("Could not retrieve video dimensions")
+    end
 end
 
 mp.register_event("file-loaded", on_file_loaded)
@@ -154,6 +179,7 @@ mp.add_key_binding(nil, "take-custom-screenshot", take_custom_screenshot)
 mp.add_key_binding("KP_DEL", "delete_current_file", delete_current_file)
 
 mp.register_script_message("test", test)
+mp.register_script_message("resize-to-video", resize_to_video)
 
 mp.register_script_message("display_current_display_settings", display_current_display_settings)
 mp.register_script_message("toggle_contrast_gamma", toggle_contrast_gamma)
