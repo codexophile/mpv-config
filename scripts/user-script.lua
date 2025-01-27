@@ -5,8 +5,8 @@ local high_contrast = false
 function toggle_contrast_gamma()
 
     if high_contrast then
-        mp.set_property("contrast", 0)
-        mp.set_property("gamma", 0)
+        mp.set_property("contrast", 1)
+        mp.set_property("gamma", 1)
         high_contrast = false
     else
         mp.set_property("contrast", 100)
