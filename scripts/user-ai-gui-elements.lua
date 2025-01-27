@@ -50,6 +50,11 @@ function get_remaining_time()
         format_time(apparent_remaining_time))
 end
 
+function get_frame_rate()
+    local fps = mp.get_property_number("estimated-vf-fps", 0)
+    return string.format("%.1f FPS", fps)
+end
+
 function create_ass_header(alignment)
     return string.format(
         "{\\a%d\\fs%d\\1c&H%s\\b1\\bord2\\3c&H%s\\3a&H%s}",
@@ -70,6 +75,12 @@ function draw_elements()
     ass:append(create_ass_header(3))
     ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 2 - 10)
     ass:append(get_playback_percentage())
+
+    -- Draw frame rate
+    ass:new_event()
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 3 - 15)
+    ass:append(get_frame_rate())
     
     -- Draw remaining time
     ass:new_event()
@@ -93,7 +104,7 @@ end
 mp.observe_property("chapter", "number", function(_, current_chapter)
     draw_elements()
 end)
-
+mp.observe_property("estimated-vf-fps", "number", draw_elements)
 mp.observe_property("time-pos", "number", draw_elements)
 mp.register_event("file-loaded", function()
     draw_elements()
