@@ -60,9 +60,15 @@ function get_video_dimensions()
     local video_w = mp.get_property_number("video-params/w", 0)
     local video_h = mp.get_property_number("video-params/h", 0)
     
-    -- Get current window dimensions
-    local window_w = mp.get_property_number("width", 0)
-    local window_h = mp.get_property_number("height", 0)
+    -- Get current window dimensions from osd-dimensions
+    local osd_dim = mp.get_property_native("osd-dimensions")
+    if not osd_dim then return "N/A" end
+    
+    local window_w = osd_dim.w
+    local window_h = osd_dim.h
+    
+    -- Avoid division by zero
+    if video_w == 0 or video_h == 0 then return "N/A" end
     
     -- Calculate scaling percentage
     local scale_w = (window_w / video_w) * 100
@@ -71,7 +77,7 @@ function get_video_dimensions()
     -- Format the dimensions string
     return string.format("%dx%d → %dx%d (%.1f%%)", 
         video_w, video_h,
-        window_w, window_h,
+        math.floor(window_w), math.floor(window_h),
         (scale_w + scale_h) / 2)  -- Average scale percentage
 end
 
@@ -134,8 +140,7 @@ mp.observe_property("estimated-vf-fps", "number", draw_elements)
 mp.observe_property("time-pos", "number", draw_elements)
 mp.observe_property("video-params/w", "number", draw_elements)
 mp.observe_property("video-params/h", "number", draw_elements)
-mp.observe_property("width", "number", draw_elements)
-mp.observe_property("height", "number", draw_elements)
+mp.observe_property("osd-dimensions", "native", draw_elements)
 mp.register_event("file-loaded", function()
     draw_elements()
 end)
