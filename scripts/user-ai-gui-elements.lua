@@ -55,6 +55,26 @@ function get_frame_rate()
     return string.format("%.1f FPS", fps)
 end
 
+function get_video_dimensions()
+    -- Get native video dimensions
+    local video_w = mp.get_property_number("video-params/w", 0)
+    local video_h = mp.get_property_number("video-params/h", 0)
+    
+    -- Get current window dimensions
+    local window_w = mp.get_property_number("width", 0)
+    local window_h = mp.get_property_number("height", 0)
+    
+    -- Calculate scaling percentage
+    local scale_w = (window_w / video_w) * 100
+    local scale_h = (window_h / video_h) * 100
+    
+    -- Format the dimensions string
+    return string.format("%dx%d → %dx%d (%.1f%%)", 
+        video_w, video_h,
+        window_w, window_h,
+        (scale_w + scale_h) / 2)  -- Average scale percentage
+end
+
 function create_ass_header(alignment)
     return string.format(
         "{\\a%d\\fs%d\\1c&H%s\\b1\\bord2\\3c&H%s\\3a&H%s}",
@@ -69,6 +89,12 @@ end
 function draw_elements()
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
+    
+    -- Draw video dimensions
+    ass:new_event()
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 4 - 20)
+    ass:append(get_video_dimensions())
     
     -- Draw percentage
     ass:new_event()
@@ -106,6 +132,10 @@ mp.observe_property("chapter", "number", function(_, current_chapter)
 end)
 mp.observe_property("estimated-vf-fps", "number", draw_elements)
 mp.observe_property("time-pos", "number", draw_elements)
+mp.observe_property("video-params/w", "number", draw_elements)
+mp.observe_property("video-params/h", "number", draw_elements)
+mp.observe_property("width", "number", draw_elements)
+mp.observe_property("height", "number", draw_elements)
 mp.register_event("file-loaded", function()
     draw_elements()
 end)
