@@ -107,66 +107,76 @@ end
 
 -- Table to persistently track chapter thumbnails by chapter time (nanoseconds as string)
 local chapter_thumbnails = {}
+local pending_chapter = nil -- holds {time, title} after first step
 
 local function add_chapter()
-    local time_pos = mp.get_property_number("time-pos")
-    local chapter_list = mp.get_property_native("chapter-list")
+    if pending_chapter then
+        -- Second press: generate thumbnail and finalize chapter
+        local time_pos = mp.get_property_number("time-pos")
+        local chapter_list = mp.get_property_native("chapter-list")
+        local chapter_index = (mp.get_property_number("chapter") or -1) + 2
+        local video_path = mp.get_property("path")
+        local video_dir = utils.split_path(video_path)
+        local video_filename = mp.get_property("filename")
+        local chapter_time_ns = tostring(pending_chapter.time * 1000000000)
+        local thumb_name = string.format("%s_chapter_%s.jpg", video_filename, chapter_time_ns)
+        local thumb_path = utils.join_path(video_dir, thumb_name)
 
-    local chapter_index = (mp.get_property_number("chapter") or -1) + 2
-
-    mp.osd_message(mp.get_property_osd("time-pos/full"), 1)
-
-    -- Generate thumbnail
-    local video_path = mp.get_property("path")
-    local video_dir = utils.split_path(video_path)
-    local video_filename = mp.get_property("filename")
-    local thumb_name = string.format("%s_chapter_%d.jpg", video_filename, chapter_index)
-    local thumb_path = utils.join_path(video_dir, thumb_name)
-
-    local ffmpeg_args = {
-        "ffmpeg", "-y", "-ss", tostring(time_pos), "-i", video_path,
-        "-frames:v", "1", "-q:v", "2", thumb_path
-    }
-    local process = mp.command_native({
-        name = 'subprocess',
-        playback_only = false,
-        capture_stdout = true,
-        capture_stderr = true,
-        args = ffmpeg_args
-    })
-    if process.status == 0 then
-        msg.debug("Thumbnail created at ", thumb_path)
-    else
-        msg.error("Failed to create thumbnail: ", process.stderr)
-        thumb_path = ""
-    end
-
-    -- Store thumbnail path by chapter start time (as nanoseconds string)
-    local chapter_time_ns = tostring(time_pos * 1000000000)
-    chapter_thumbnails[chapter_time_ns] = thumb_path
-
-    table.insert(chapter_list, chapter_index, {title = "", time = time_pos})
-
-    msg.debug("inserting new chapter at ", chapter_index, " chapter_", " time: ", time_pos)
-
-    mp.set_property_native("chapter-list", chapter_list)
-    chapters_modified = true
-
-    if options.ask_for_title then
-        input.get({
-            prompt = "title of the chapter:",
-            submit = change_title_callback,
-            default_text = options.placeholder_title .. chapter_index,
-            cursor_position = #(options.placeholder_title .. chapter_index) + 1,
+        local ffmpeg_args = {
+            "ffmpeg", "-y", "-ss", tostring(time_pos), "-i", video_path,
+            "-frames:v", "1", "-q:v", "2", thumb_path
+        }
+        local process = mp.command_native({
+            name = 'subprocess',
+            playback_only = false,
+            capture_stdout = true,
+            capture_stderr = true,
+            args = ffmpeg_args
         })
-
-        edited_chapter = chapter_index
-
-        if options.pause_on_input then
-            mp.set_property_bool("pause", true)
+        if process.status == 0 then
+            msg.debug("Thumbnail created at ", thumb_path)
+            chapter_thumbnails[chapter_time_ns] = thumb_path
+            mp.osd_message("Chapter and thumbnail added.", 2)
+        else
+            msg.error("Failed to create thumbnail: ", process.stderr)
+            mp.osd_message("Failed to create thumbnail.", 2)
+            chapter_thumbnails[chapter_time_ns] = ""
         end
+
+        -- Insert chapter
+        table.insert(chapter_list, chapter_index, {title = pending_chapter.title, time = pending_chapter.time})
+        msg.debug("inserting new chapter at ", chapter_index, " time: ", pending_chapter.time, " title: ", pending_chapter.title)
+        mp.set_property_native("chapter-list", chapter_list)
+        chapters_modified = true
+        pending_chapter = nil
+        return
     end
+
+    -- First press: ask for chapter name and store state
+    local time_pos = mp.get_property_number("time-pos")
+    if not time_pos then
+        mp.osd_message("No playback position.", 2)
+        return
+    end
+    input.get({
+        prompt = "title of the chapter:",
+        submit = function(user_input)
+            input.terminate()
+            if not user_input or user_input == "" then
+                mp.osd_message("No chapter title provided.", 2)
+                return
+            end
+            pending_chapter = {time = time_pos, title = user_input}
+            mp.osd_message("Seek to thumbnail point and press the key again.", 4)
+            if options.pause_on_input then
+                mp.set_property_bool("pause", true)
+            end
+        end,
+        default_text = options.placeholder_title,
+        cursor_position = #(options.placeholder_title) + 1,
+    })
 end
+
 
 
 local function remove_chapter()
