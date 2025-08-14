@@ -104,18 +104,46 @@ local function edit_chapter()
 end
 
 
+
+-- Table to persistently track chapter thumbnails by chapter time (nanoseconds as string)
+local chapter_thumbnails = {}
+
 local function add_chapter()
     local time_pos = mp.get_property_number("time-pos")
     local chapter_list = mp.get_property_native("chapter-list")
 
-    -- mpv sets 'chapter' var to -1 before the 'first' chapter, and indexes
-    -- chapters from 0, but lua tables start indexing from 1 and we want
-    -- to insert one after that, so that's +2
-    -- if there are no chapters mpv sets it to nil, so correct it to -1
     local chapter_index = (mp.get_property_number("chapter") or -1) + 2
 
-    -- show user the timestamp of the chapter we're adding
     mp.osd_message(mp.get_property_osd("time-pos/full"), 1)
+
+    -- Generate thumbnail
+    local video_path = mp.get_property("path")
+    local video_dir = utils.split_path(video_path)
+    local video_filename = mp.get_property("filename")
+    local thumb_name = string.format("%s_chapter_%d.jpg", video_filename, chapter_index)
+    local thumb_path = utils.join_path(video_dir, thumb_name)
+
+    local ffmpeg_args = {
+        "ffmpeg", "-y", "-ss", tostring(time_pos), "-i", video_path,
+        "-frames:v", "1", "-q:v", "2", thumb_path
+    }
+    local process = mp.command_native({
+        name = 'subprocess',
+        playback_only = false,
+        capture_stdout = true,
+        capture_stderr = true,
+        args = ffmpeg_args
+    })
+    if process.status == 0 then
+        msg.debug("Thumbnail created at ", thumb_path)
+    else
+        msg.error("Failed to create thumbnail: ", process.stderr)
+        thumb_path = ""
+    end
+
+    -- Store thumbnail path by chapter start time (as nanoseconds string)
+    local chapter_time_ns = tostring(time_pos * 1000000000)
+    chapter_thumbnails[chapter_time_ns] = thumb_path
 
     table.insert(chapter_list, chapter_index, {title = "", time = time_pos})
 
@@ -367,9 +395,15 @@ local function construct_ffmetadata()
             c_end = (mp.get_property_number("duration") or c.time) * 1000000000
         end
 
-        msg.debug(i, "c_title", c_title, "c_start:", c_start, "c_end", c_end)
+        -- Lookup thumbnail by chapter start time
+        local c_thumb = chapter_thumbnails[tostring(c_start)] or ""
+
+        msg.debug(i, "c_title", c_title, "c_start:", c_start, "c_end", c_end, "c_thumb", c_thumb)
 
         ffmetadata = ffmetadata .. "\n[CHAPTER]\nSTART=" .. c_start .. "\nEND=" .. c_end .. "\ntitle=" .. c_title
+        if c_thumb ~= "" then
+            ffmetadata = ffmetadata .. "\nthumbnail=" .. c_thumb
+        end
     end
 
     return ffmetadata
