@@ -39,9 +39,9 @@ local options = {
     -- ask for title or leave it empty
     ask_for_title = true,
     -- placeholder when asking for title of a new chapter
-    placeholder_title = "Chapter ",
+    placeholder_title = "",
     -- pause the playback when asking for chapter title
-    pause_on_input = false,
+    pause_on_input = true,
     autoload = true,
     autosave = false,
     -- save all chapter files in a single global directory or next to the playback file

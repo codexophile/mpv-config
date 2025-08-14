@@ -111,18 +111,7 @@ end
 
 function on_file_loaded()
     local path = mp.get_property("path")
-    local filename = mp.get_property("filename")
-    local title = filename  -- Default title is just the filename
-
-    if string.find(path, "W:\\") then
-        title = string.format("%s - [W] - mpv", filename)
-    elseif string.find(path, "\\Movies\\") then
-        title = string.format("%s - [Movie] - mpv", filename)
-    elseif string.find(path, "\\TV\\") then
-        title = string.format("%s - [TV] - mpv", filename)
-    end
-
-    mp.set_property("title", title)
+    mp.set_property("title", path)
 end
 
 function take_custom_screenshot()
