@@ -5,6 +5,12 @@
 -- Project: UndoRedo
 -- Version: 2.2
 
+-- Description:
+-- Provides simple undo/redo navigation for mpv by recording recent seek
+-- positions and allowing the user to jump backwards (undo) and forwards
+-- (redo) through those positions via keybindings (default: Ctrl+Z / Ctrl+Y).
+-- Optionally displays OSD messages for actions.
+
 local utils = require 'mp.utils'
 local msg = require 'mp.msg'
 local seconds = 0
