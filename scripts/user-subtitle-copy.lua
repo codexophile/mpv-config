@@ -37,14 +37,53 @@ local msg = require 'mp.msg'
 
 -- Config (simple heuristics)
 local cfg = {
-    avg_char_factor = 0.55,   -- proportion of font size considered avg char width
-    space_factor = 0.35,      -- space relative width vs font size
-    line_height_factor = 1.25,-- line height multiplier on font size
     max_words = 400,          -- safety limit
     highlight_color = '&H220000FF', -- BGR with alpha (semi-transparent red fill)
     highlight_border_color = '&H000000FF',
     border = 2,
+    manual_y_offset = 0,      -- user tweak (pixels), positive = down
+    measure_space_cache = true,
 }
+
+-- Measurement overlay (compute_bounds)
+local measure_osd = mp.create_osd_overlay('ass-events')
+measure_osd.compute_bounds = true
+measure_osd.hidden = true
+
+local space_width_cache = nil
+local word_width_cache = {}
+
+local function ass_escape(text)
+    return text:gsub('\\','\\\\'):gsub('{','\\{'):gsub('}','\\}')
+end
+
+local function measure_text(text)
+    local w,h = 0,0
+    local ow,oh = mp.get_osd_size()
+    measure_osd.res_x, measure_osd.res_y = ow, oh
+    measure_osd.data = '{\\an7}' .. ass_escape(text)
+    local res = measure_osd:update()
+    if res and res.x0 and res.x1 then
+        w = res.x1 - res.x0
+        h = res.y1 - res.y0
+    end
+    return w,h
+end
+
+local function get_space_width()
+    if space_width_cache and cfg.measure_space_cache then return space_width_cache end
+    local w = measure_text(' ')
+    space_width_cache = w
+    return w
+end
+
+local function get_word_width(word)
+    local cached = word_width_cache[word]
+    if cached then return cached end
+    local w = measure_text(word)
+    word_width_cache[word] = w
+    return w
+end
 
 local function strip_ass_tags(s)
     -- remove simple ASS override tags {\...}
@@ -71,16 +110,20 @@ local function build_word_boxes()
     hovered_index = nil
     local sub_text = mp.get_property('sub-text')
     if not sub_text or sub_text == '' then return end
+    -- Reset caches if font-size changed (simple approach)
     local font_size = mp.get_property_number('sub-font-size') or 55
+    if font_size ~= last_sub_id then -- reuse last_sub_id variable for simple invalidation
+        word_width_cache = {}
+        space_width_cache = nil
+        last_sub_id = font_size
+    end
     local dims = mp.get_property_native('osd-dimensions') or {}
     local dw, dh = (dims.w or 1280), (dims.h or 720)
     local mb = dims.mb or 0
     local mt = dims.mt or 0
     local sub_pos = mp.get_property_number('sub-pos') or 100 -- 0=top 100=bottom
     local usable_h = dh - mt - mb
-    local avg_char = font_size * cfg.avg_char_factor
-    local space_w = font_size * cfg.space_factor
-    local line_h = font_size * cfg.line_height_factor
+    local space_w = get_space_width()
 
     -- basic bottom-centered block layout
     local plain = strip_ass_tags(sub_text)
@@ -88,53 +131,46 @@ local function build_word_boxes()
     if #lines == 0 then return end
     msg.verbose('[user_subtitle_copy] lines:', #lines)
 
-    -- measure each line width (approx)
-    local line_widths = {}
-    for i, line in ipairs(lines) do
-        local width = 0
-        local first = true
-        for word in line:gmatch('%S+') do
-            local wlen = 0
-            -- naive width: count UTF-8 chars; treat multi-byte as width 1 (imperfect)
-            local char_count = 0
-            for _ in word:gmatch('.') do char_count = char_count + 1 end
-            wlen = char_count * avg_char
-            width = width + (first and 0 or space_w) + wlen
-            first = false
-        end
-        line_widths[i] = width
+    -- measure each line width & height
+    local line_metrics = {}
+    local total_height = 0
+    for i,line in ipairs(lines) do
+        local w,h = measure_text(line == '' and ' ' or line)
+        line_metrics[i] = {width = w, height = h}
+        total_height = total_height + h
     end
 
-    local block_height = #lines * line_h
-    -- Position within usable area according to sub-pos (mpv distributes from top to bottom)
-    local y_top = mt + (usable_h - block_height) * (sub_pos / 100)
-    msg.verbose(string.format('[user_subtitle_copy] dims: w=%d h=%d mt=%d mb=%d sub-pos=%d y_top=%.1f', dw, dh, mt, mb, sub_pos, y_top))
+    local block_height = total_height
+    local y_top = mt + (usable_h - block_height) * (sub_pos / 100) + cfg.manual_y_offset
+    msg.verbose(string.format('[user_subtitle_copy] dims: w=%d h=%d mt=%d mb=%d sub-pos=%d y_top=%.1f block_h=%.1f', dw, dh, mt, mb, sub_pos, y_top, block_height))
 
     local idx = 0
-    for li, line in ipairs(lines) do
-        local line_w = line_widths[li]
-        local x_start = (dw - line_w) / 2 -- centered
+    local acc_height = 0
+    for li,line in ipairs(lines) do
+        local lm = line_metrics[li]
+        local line_h = lm.height
+        local line_w = lm.width
+        local x_start = (dw - line_w) / 2
         local cursor_x = x_start
         for raw in line:gmatch('%S+') do
             local word = normalize_word(raw)
             if word ~= '' then
-                local char_count = 0
-                for _ in raw:gmatch('.') do char_count = char_count + 1 end
-                local w_px = char_count * avg_char
+                local w_px = get_word_width(raw)
                 idx = idx + 1
                 if idx > cfg.max_words then break end
                 table.insert(current_words, {
                     word = word,
                     x = cursor_x,
-                    y = y_top + (li - 1) * line_h,
+                    y = y_top + acc_height,
                     w = w_px,
                     h = line_h,
                 })
                 cursor_x = cursor_x + w_px + space_w
             else
-                cursor_x = cursor_x + space_w -- skip width for stripped punctuation-only token
+                cursor_x = cursor_x + space_w
             end
         end
+        acc_height = acc_height + line_h
         if idx > cfg.max_words then break end
     end
     msg.verbose(string.format('[user_subtitle_copy] built %d word boxes', #current_words))
@@ -160,9 +196,9 @@ local function render_highlight()
     local y1 = wb.y + wb.h - pad_y
     -- Escape backslashes for Lua so ASS tags remain intact
     -- Use explicit alpha on primary color (1a) to avoid unintended inheritance
-    a:append(string.format('{\\an7}\\pos(0,0){\\bord%d\\shad0\\1c%s\\3c%s\\1a&H40&}', cfg.border, cfg.highlight_color, cfg.highlight_border_color))
+    a:append(string.format([[{\an7\pos(0,0)\bord%d\shad0\1c%s\3c%s\1a&H40&}]], cfg.border, cfg.highlight_color, cfg.highlight_border_color))
     -- shape (vector drawing)
-    a:append(string.format('{\\p1}m %d %d l %d %d %d %d %d %d{\\p0}', x0, y0, x1, y0, x1, y1, x0, y1))
+    a:append(string.format([[{\p1}m %d %d l %d %d %d %d %d %d{\p0}]], x0, y0, x1, y0, x1, y1, x0, y1))
     osd_overlay.data = a.text
     osd_overlay.hidden = false
     osd_overlay:update()
