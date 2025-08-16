@@ -245,6 +245,71 @@ end
 
 mp.add_forced_key_binding('MOUSE_BTN0', 'copy_sub_word', copy_hovered_word)
 
+-- ================= Calibration (to determine vertical offset) =================
+local function calibrate_vertical_offset()
+    local pos = mp.get_property_native('mouse-pos')
+    if not pos or not current_words[1] then
+        msg.info('[user_subtitle_copy] calibration: no words / mouse pos available')
+        return
+    end
+    -- pick the word under cursor if any, else closest by horizontal distance
+    local candidate = nil
+    local best_dx = math.huge
+    for _, wb in ipairs(current_words) do
+        local inside = pos.x >= wb.x and pos.x <= wb.x + wb.w and pos.y >= wb.y and pos.y <= wb.y + wb.h
+        if inside then
+            candidate = wb
+            break
+        else
+            local cx = wb.x + wb.w / 2
+            local dx = math.abs(pos.x - cx)
+            if dx < best_dx then
+                best_dx = dx
+                candidate = wb
+            end
+        end
+    end
+    if not candidate then
+        msg.info('[user_subtitle_copy] calibration: no candidate word')
+        return
+    end
+    local top_diff = pos.y - candidate.y
+    local center_diff = pos.y - (candidate.y + candidate.h / 2)
+    local bottom_diff = pos.y - (candidate.y + candidate.h)
+    msg.info(string.format('[user_subtitle_copy] CALIBRATION word="%s" mouse_y=%d word.y=%.1f h=%.1f top_diff=%.1f center_diff=%.1f bottom_diff=%.1f current_manual_y_offset=%d',
+        candidate.word, pos.y, candidate.y, candidate.h, top_diff, center_diff, bottom_diff, cfg.manual_y_offset))
+    msg.info('[user_subtitle_copy] Suggestion: set cfg.manual_y_offset = cfg.manual_y_offset + center_diff (or top_diff) and reload script.')
+    -- store last diffs for auto adjust
+    last_calibration = {center = center_diff, top = top_diff, bottom = bottom_diff}
+end
+
+-- Bind to Ctrl+Shift+Y (adjust if conflicts). It only logs values.
+mp.add_key_binding('ctrl+shift+y', 'subtitle_word_calibrate', calibrate_vertical_offset)
+
+-- Auto apply last calibration center diff
+local function apply_calibration_center()
+    if not last_calibration or not last_calibration.center then
+        msg.info('[user_subtitle_copy] No calibration data yet. Press Ctrl+Shift+Y first with cursor over a word.')
+        return
+    end
+    cfg.manual_y_offset = cfg.manual_y_offset + last_calibration.center
+    msg.info(string.format('[user_subtitle_copy] Applied center diff %.1f. New manual_y_offset=%d', last_calibration.center, cfg.manual_y_offset))
+    build_word_boxes(); render_highlight()
+end
+mp.add_key_binding('ctrl+shift+o', 'subtitle_word_apply_offset', apply_calibration_center)
+
+-- Script message interface: script-message-to user-subtitle-copy subcopy-set-offset <number>
+mp.register_script_message('subcopy-set-offset', function(val)
+    local n = tonumber(val)
+    if not n then
+        msg.error('[user_subtitle_copy] subcopy-set-offset requires numeric value')
+        return
+    end
+    cfg.manual_y_offset = n
+    msg.info('[user_subtitle_copy] manual_y_offset set to ' .. n)
+    build_word_boxes(); render_highlight()
+end)
+
 -- Cleanup overlay on file end / subtitle clear
 mp.register_event('end-file', function()
     current_words = {}
