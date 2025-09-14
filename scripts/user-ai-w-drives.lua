@@ -12,7 +12,7 @@ local TARGET_DRIVES = {
 -- Default settings to apply when the drive is NOT in TARGET_DRIVES
 -- You might want to remove these if you prefer mpv's global defaults
 local DEFAULT_SETTINGS = {
-    saturation = 0.01, -- Default saturation
+    saturation = 30, -- Default saturation
     volume = 100       -- Default volume (or whatever your mpv.conf default is)
 }
 
