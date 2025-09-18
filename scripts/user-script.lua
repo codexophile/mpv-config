@@ -111,7 +111,22 @@ end
 
 function on_file_loaded()
     local path = mp.get_property("path")
-    mp.set_property("title", path)
+    if path then
+        local filename = mp.get_property("filename")
+        local title = filename
+        
+        -- Convert path to lowercase for case-insensitive matching
+        local path_lower = path:lower()
+        
+        -- Check if path contains 'tv' or 'movies' folder
+        if path_lower:match("[/\\]tv[/\\]") then
+            title = filename .. " [tv]"
+        elseif path_lower:match("[/\\]movies?[/\\]") then
+            title = filename .. " [movie]"
+        end
+        
+        mp.set_property("title", title)
+    end
 end
 
 function take_custom_screenshot()
