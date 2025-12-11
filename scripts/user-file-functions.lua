@@ -116,8 +116,34 @@ end
 local current_extractor = nil
 local current_ids = nil
 
--- Create buttons for source and OP
-local function add_buttons()
+-- Create OSD buttons with clickable areas
+local osd = mp.create_osd_overlay('ass-events')
+local buttons_visible = false
+
+local function show_buttons()
+  if not (current_extractor and current_ids) then return end
+  
+  -- Create ASS formatted text with button styling, positioned lower
+  local ass_text = [[{\an7\pos(10,60)}{\bord2\1c&H00AA00&\3c&H000000&\blur0}[OP]  [SOURCE]{\r}{\an7\pos(10,85)}Press: o / s]]
+  osd.data = ass_text
+  osd.res_x = mp.get_property_number('dwidth', 1920)
+  osd.res_y = mp.get_property_number('dheight', 1080)
+  osd:update()
+  buttons_visible = true
+  mp.msg.info('Buttons shown')
+end
+
+local function hide_buttons()
+  osd.data = ''
+  osd:update()
+  buttons_visible = false
+  mp.msg.info('Buttons hidden')
+end
+
+-- Original add_buttons called first
+-- Show buttons when file loads with matching pattern
+mp.register_event('file-loaded', function()
+  mp.msg.info('=== file-loaded event ===')
   local path = mp.get_property('path')
   if not path then 
     mp.msg.debug('No path available')
@@ -139,6 +165,7 @@ local function add_buttons()
   local extractor, ids = parse_filename(filename)
   if not extractor or not ids then 
     mp.msg.debug('Pattern did not match')
+    hide_buttons()
     return 
   end
   
@@ -148,15 +175,8 @@ local function add_buttons()
   
   mp.msg.info(string.format('Pattern matched! Extractor: %s, IDs: %s', extractor, ids))
   mp.osd_message(string.format('Found: %s (o: op, s: source)', extractor))
-end
-
--- Event handlers
-mp.register_event('file-loaded', function()
-  mp.msg.info('=== file-loaded event ===')
-  add_buttons()
+  show_buttons()
 end)
-
--- Key bindings for buttons
 mp.add_key_binding('o', 'find-op-button', function()
   mp.msg.info('find-op-button (o) pressed')
   if current_extractor and current_ids then
@@ -196,32 +216,28 @@ mp.register_script_message('uosc-button-source', function()
   end
 end)
 
--- Create OSD buttons
+-- Create OSD buttons with clickable areas
 local osd = mp.create_osd_overlay('ass-events')
 local buttons_visible = false
 
 local function show_buttons()
   if not (current_extractor and current_ids) then return end
   
-  local ass_text = [[{\q1\pos(100,100)\bord1\1c&H00FF00&\3c&H000000&}OP  |  SOURCE]]
+  -- Create ASS formatted text with button styling, positioned lower
+  local ass_text = [[{\an7\pos(10,60)}{\bord2\1c&H00AA00&\3c&H000000&\blur0}[OP]  [SOURCE]{\r}{\an7\pos(10,85)}Press: o / s]]
   osd.data = ass_text
   osd.res_x = mp.get_property_number('dwidth', 1920)
   osd.res_y = mp.get_property_number('dheight', 1080)
   osd:update()
   buttons_visible = true
+  mp.msg.info('Buttons shown')
 end
 
 local function hide_buttons()
   osd.data = ''
   osd:update()
   buttons_visible = false
-end
-
--- Show buttons when file loads with matching pattern
-local original_add_buttons = add_buttons
-function add_buttons()
-  original_add_buttons()
-  show_buttons()
+  mp.msg.info('Buttons hidden')
 end
 
 -- Hide buttons when file unloads
