@@ -1,5 +1,26 @@
 local utils = require 'mp.utils'
 
+-- ab_text.lua
+function custom_ab_loop()
+        mp.osd_message("xxxxxxxxxxx")
+
+    -- Get the current state of the loop points
+    local a_point = mp.get_property("ab-loop-a")
+    local b_point = mp.get_property("ab-loop-b")
+
+    -- Execute the native ab-loop command silently (no-osd)
+    mp.command("no-osd ab-loop")
+    -- Determine which message to show based on the Previous state
+    if a_point == "no" then
+        mp.osd_message("point a set")
+    elseif b_point == "no" then
+        mp.osd_message("point b set")
+    else
+        mp.osd_message("ab loop cleared")
+    end
+end
+
+
 
 local high_contrast = false
 function toggle_contrast_gamma()
@@ -190,3 +211,5 @@ mp.register_script_message("toggle_contrast_gamma", toggle_contrast_gamma)
 mp.register_script_message("toggle-saturation", create_toggler("saturation"))
 mp.register_script_message("toggle-contrast", create_toggler("contrast"))
 mp.register_script_message("toggle-gamma", create_toggler("gamma"))
+
+mp.add_key_binding("\\", "display-ab-state", custom_ab_loop)
