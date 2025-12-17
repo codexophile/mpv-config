@@ -22,6 +22,20 @@ end
 
 
 
+local function set_ab_point(which)
+    local time_pos = mp.get_property_number("time-pos")
+    if not time_pos then
+        mp.osd_message("No playback position available")
+        return
+    end
+
+    mp.set_property_number(which, time_pos)
+
+    local label = which == "ab-loop-a" and "A" or "B"
+    mp.osd_message(string.format("point %s set at %.3fs", label, time_pos))
+end
+
+
 local high_contrast = false
 function toggle_contrast_gamma()
 
@@ -213,3 +227,5 @@ mp.register_script_message("toggle-contrast", create_toggler("contrast"))
 mp.register_script_message("toggle-gamma", create_toggler("gamma"))
 
 mp.add_key_binding("\\", "display-ab-state", custom_ab_loop)
+mp.add_key_binding("[", "set-ab-point-a", function() set_ab_point("ab-loop-a") end)
+mp.add_key_binding("]", "set-ab-point-b", function() set_ab_point("ab-loop-b") end)
