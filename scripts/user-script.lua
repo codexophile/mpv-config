@@ -16,12 +16,19 @@ function copy_frame_to_clipboard()
 
     if platform == "windows" then
         local ps_path = tmp_file:gsub('"', '`"')
-        local ps_script = string.format([[Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $p="%s"; $img=[System.Drawing.Image]::FromFile($p); [System.Windows.Forms.Clipboard]::SetImage($img); Remove-Item $p]], ps_path)
+        local ps_script = string.format([[Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $p="%s"; $img=[System.Drawing.Image]::FromFile($p); [System.Windows.Forms.Clipboard]::SetImage($img); $img.Dispose(); Remove-Item $p -ErrorAction SilentlyContinue]], ps_path)
         local res = utils.subprocess({ args = {"powershell", "-NoProfile", "-Command", ps_script} })
         if res.status ~= 0 then
             mp.osd_message("clipboard copy failed")
             mp.msg.warn("clipboard copy failed: " .. (res.stderr or ""))
             return
+        end
+        -- Ensure temp file is gone even if PowerShell did not delete it (e.g., file lock issues).
+        if utils.file_info(tmp_file) then
+            local _, rm_err = pcall(os.remove, tmp_file)
+            if rm_err then
+                mp.msg.warn("temp screenshot not removed: " .. tostring(rm_err))
+            end
         end
         mp.osd_message("frame copied to clipboard")
     else
