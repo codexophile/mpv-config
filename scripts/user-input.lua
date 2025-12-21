@@ -1,3 +1,76 @@
+--[[
+User Input OSD and Request Queue for mpv
+
+This script provides a generic, on-screen text input prompt that other mpv
+Lua scripts can invoke via script messages. It renders an ASS-based input UI
+at the bottom of the video, handles rich text-editing interactions, and
+returns the entered text (or an error status) back to the requesting script.
+
+Key capabilities
+- Rendering: Draws a prompt and an editable input line on the OSD using ASS.
+    Honors high-DPI scaling and configurable `font`, `font_size`, and `scale`.
+    Adapts default font per platform (Windows/macOS/Linux). Respects
+    `user-data/osc/margins` to avoid overlapping external UI.
+- Editing: Supports cursor movement, insert/overwrite mode, word navigation,
+    deletion (char/word/to-start/to-EOL), Home/End, and multi-line input via
+    Shift+Enter. Clipboard paste works across X11/Wayland/macOS/Windows.
+- History: Maintains per-request-id input history (Up/Down, PgUp/PgDown).
+- Keybindings: Readline-like bindings plus mpv standard keys. ESC exits the
+    current prompt; Enter submits. Unicode text is accepted (`any_unicode`).
+- Queueing: Multiple concurrent requesters are coordinated through a FIFO
+    queue. Shows a queued count above the prompt when multiple requests exist.
+- Lifecycle: Prompts are activated only while processing requests; keybindings
+    are added/removed dynamically and garbage collected when inactive.
+
+Public API (script messages)
+- "request-user-input": Display a prompt and wait for user input.
+    Payload (JSON string):
+        {
+            version: "0.1.x",           // required; must match major.minor
+            response: string,            // required; unique uid for the reply
+            id: string,                  // required; logical group id (history key)
+            source?: string,             // optional; sender script name
+            request_text?: string,       // text shown above the input
+            default_input?: string,      // pre-filled input value
+            cursor_pos?: number,         // 1-based cursor position
+            queueable?: boolean,         // if false, reject when same id is active
+            replace?: boolean            // if true, replace existing request by id
+        }
+
+    Response is sent via `script-message-to` (if `source` provided) or
+    `script-message` using the `response` channel. Body is JSON with:
+        { line?: string, err?: string, source?: string, response?: string }
+
+    On success (Enter): { line: "..." }
+    On exit (Esc): { line: null, err: "exited" }
+    On conflict (non-queueable): { err: "already_queued" }
+    On replacement (replace flag): { err: "replaced" }
+    On cancellation: { err: "cancelled" }
+
+- "update-user-input/uid": Update fields of the current or queued request by
+    its `response` uid. Arguments: (uid, jsonOptions). Requires `version` and
+    accepts the same fields as above to change prompt text, defaults, etc.
+
+- "cancel-user-input/uid": Cancel a specific request by its `response` uid.
+- "cancel-user-input/id":  Cancel all requests sharing the given logical id.
+
+Behavior and internals
+- Requests are normalized and validated (version check against 0.1.x; required
+    `response` and `id`). A coroutine-driven driver processes the queue,
+    activates the OSD UI, and yields until the user presses Enter or Esc.
+- Per-id histories persist across prompts; when navigating history while
+    editing a non-history line, the current text is saved for convenience.
+- The OSD redraws on size/hidpi changes and when margins change.
+
+Configuration (mp.options, section: "user_input")
+- scale: number (default 1) – global UI scale multiplier.
+- font: string – font family used for OSD input (auto-selected by platform).
+- font_size: number (default 16) – base font size (scaled by `scale`).
+
+This module is designed to be consumed by other mpv scripts that need user
+text input without implementing their own OSD UI. It focuses on reliability,
+clear responses, and minimal interference with playback.
+]]
 local mp = require 'mp'
 local msg = require 'mp.msg'
 local utils = require 'mp.utils'
@@ -754,4 +827,3 @@ mp.register_script_message("request-user-input", function(req)
         msg.error(err)
     end
 end)
-
