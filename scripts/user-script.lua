@@ -1,5 +1,39 @@
 local utils = require 'mp.utils'
 
+--* copy current frame to clipboard
+function copy_frame_to_clipboard()
+    local tmp_file = mp.command_native({"expand-path", "~~/tmp_screenshot.png"})
+    local platform = mp.get_property("platform") or "unknown"
+
+    local ok, err = pcall(function()
+        mp.commandv("screenshot-to-file", tmp_file)
+    end)
+
+    if not ok then
+        mp.osd_message("screenshot failed: " .. tostring(err))
+        return
+    end
+
+    if platform == "windows" then
+        local ps_path = tmp_file:gsub('"', '`"')
+        local ps_script = string.format([[Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $p="%s"; $img=[System.Drawing.Image]::FromFile($p); [System.Windows.Forms.Clipboard]::SetImage($img); Remove-Item $p]], ps_path)
+        local res = utils.subprocess({ args = {"powershell", "-NoProfile", "-Command", ps_script} })
+        if res.status ~= 0 then
+            mp.osd_message("clipboard copy failed")
+            mp.msg.warn("clipboard copy failed: " .. (res.stderr or ""))
+            return
+        end
+        mp.osd_message("frame copied to clipboard")
+    else
+        mp.osd_message("clipboard copy not implemented for this OS")
+    end
+end
+
+-- The most common approach uses a dedicated script that first saves a screenshot and then calls the OS utility.
+-- The core logic for the OS specific command has to be correct.
+
+--*
+
 -- ab_text.lua
 function custom_ab_loop()
         mp.osd_message("xxxxxxxxxxx")
@@ -229,3 +263,5 @@ mp.register_script_message("toggle-gamma", create_toggler("gamma"))
 mp.add_key_binding("\\", "display-ab-state", custom_ab_loop)
 mp.add_key_binding("[", "set-ab-point-a", function() set_ab_point("ab-loop-a") end)
 mp.add_key_binding("]", "set-ab-point-b", function() set_ab_point("ab-loop-b") end)
+
+mp.add_key_binding("ctrl+c", "copy-frame", copy_frame_to_clipboard) 
