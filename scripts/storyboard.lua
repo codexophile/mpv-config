@@ -13,16 +13,25 @@ local options = {
     rows = 4,
     cols = 5,
 
-    -- Resolution of individual thumbnails (lower is faster)
-    thumb_w = 320,
-    thumb_h = 180,
+    -- Resolution of individual thumbnails (lower = much faster generation)
+    -- Recommended speeds: 160x90 (fastest), 240x135 (faster), 320x180 (balanced), 480x270 (quality)
+    -- Going from 320x180 to 160x90 cuts generation time roughly in half
+    thumb_w = 240,
+    thumb_h = 135,
 
     -- Output format (png is most compatible; jpg can be faster but may fail on some builds)
     format = "png",
 
+    -- PNG compression level (0-9): 0=fastest, 9=best compression
+    -- Lower value = faster generation. 3-4 is good balance
+    png_compression = 3,
+
     -- Encoder quality hint (some mpv builds ignore MJPEG quality options)
     -- If you want guaranteed quality control, consider using png.
     quality = 90,
+    
+    -- Speed optimizations (set to true for faster generation at slight quality cost)
+    fast_mode = true,
 
     -- Path to mpv executable (defaults to 'mpv')
     mpv_path = "mpv",
@@ -231,7 +240,9 @@ local function get_vf_string(duration, fmt)
     vf = vf .. "fps=" .. fps .. ","
     
     -- 2. Scale: Resize for performance and grid fit
-    vf = vf .. "scale=" .. options.thumb_w .. ":" .. options.thumb_h .. ","
+    -- Use faster scaling algorithm in fast mode
+    local scale_flags = options.fast_mode and "fast_bilinear" or "bicubic"
+    vf = vf .. "scale=" .. options.thumb_w .. ":" .. options.thumb_h .. ":flags=" .. scale_flags .. ","
 
     -- 2.5. Format: MJPEG expects full-range YUV, ensure compatible format
     if fmt == "jpg" then
@@ -254,6 +265,28 @@ local function get_vf_string(duration, fmt)
     vf = vf .. "tile=" .. options.cols .. "x" .. options.rows
     
     return vf
+end
+
+-- Convert PNG to BGRA format for overlay display
+local function convert_png_to_bgra(png_path, bgra_path)
+    local ffmpeg_args = {
+        "ffmpeg",
+        "-i", png_path,
+        "-f", "rawvideo",
+        "-pix_fmt", "bgra",
+        "-y",
+        bgra_path
+    }
+    
+    local convert_result = mp.command_native({
+        name = "subprocess",
+        playback_only = false,
+        args = ffmpeg_args,
+        capture_stdout = true,
+        capture_stderr = true
+    })
+    
+    return convert_result.status == 0
 end
 
 -- Display storyboard overlay
@@ -297,11 +330,24 @@ local function generate_storyboard(format_override, is_retry, force_regenerate)
         -- If permanent storyboard exists, use it directly
         if is_permanent then
             local png_info = utils.file_info(png_path)
-            local bgra_info = utils.file_info(bgra_path)
             
-            if png_info and bgra_info then
+            if png_info then
                 msg.info("Storyboard: Using existing storyboard")
                 mp.osd_message("Loading storyboard...", 1)
+                
+                -- Check if BGRA exists, if not convert from PNG (fast operation)
+                local bgra_info = utils.file_info(bgra_path)
+                if not bgra_info then
+                    msg.info("Storyboard: Converting PNG to BGRA...")
+                    if not convert_png_to_bgra(png_path, bgra_path) then
+                        msg.error("Failed to convert PNG to BGRA")
+                        mp.osd_message("Storyboard conversion failed", 3)
+                        return
+                    end
+                    -- Track BGRA as temporary for cleanup
+                    table.insert(temp_conversion_files, bgra_path)
+                end
+                
                 display_storyboard(png_path, bgra_path)
                 return
             end
@@ -354,6 +400,21 @@ local function generate_storyboard(format_override, is_retry, force_regenerate)
         "--o=" .. png_path
     }
     
+    -- PNG compression settings (for faster generation)
+    if fmt == "png" then
+        table.insert(args, "--ovcopts=compression=" .. options.png_compression)
+    end
+    
+    -- Speed optimizations
+    if options.fast_mode then
+        table.insert(args, "--hwdec=auto")  -- Hardware decoding
+        table.insert(args, "--sws-scaler=fast-bilinear")  -- Faster scaling
+        table.insert(args, "--profile=fast")  -- Fast profile
+        table.insert(args, "--vd-lavc-fast")  -- Fast video decoding
+        table.insert(args, "--vd-lavc-skiploopfilter=all")  -- Skip deblocking
+        table.insert(args, "--vd-lavc-threads=0")  -- Auto thread count
+    end
+    
     if fmt == "jpg" then
         -- Some builds lack MJPEG options; keep args minimal for compatibility.
     end
@@ -378,24 +439,7 @@ local function generate_storyboard(format_override, is_retry, force_regenerate)
         if success and result.status == 0 then
             -- If PNG, convert to raw BGRA for overlay
             if fmt == "png" and bgra_path then
-                local ffmpeg_args = {
-                    "ffmpeg",
-                    "-i", png_path,
-                    "-f", "rawvideo",
-                    "-pix_fmt", "bgra",
-                    "-y",
-                    bgra_path
-                }
-                
-                local convert_result = mp.command_native({
-                    name = "subprocess",
-                    playback_only = false,
-                    args = ffmpeg_args,
-                    capture_stdout = true,
-                    capture_stderr = true
-                })
-                
-                if convert_result.status ~= 0 then
+                if not convert_png_to_bgra(png_path, bgra_path) then
                     msg.error("Failed to convert PNG to BGRA")
                     mp.osd_message("Storyboard conversion failed", 3)
                     return
