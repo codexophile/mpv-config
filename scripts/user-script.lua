@@ -201,7 +201,7 @@ function on_file_loaded()
             title = filename .. " [movie]"
         end
         
-        mp.set_property("title", title)
+        mp.set_property("title", title .. " - mpv")
     end
 end
 
