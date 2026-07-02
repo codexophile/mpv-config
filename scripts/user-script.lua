@@ -195,7 +195,9 @@ function on_file_loaded()
         local path_lower = path:lower()
         
         -- Check if path contains 'tv' or 'movies' folder
-        if path_lower:match("[/\\]tv[/\\]") then
+        if path_lower:match("[WwXx]:") then
+            title = filename .. " [w]"
+        elseif path_lower:match("[/\\]tv[/\\]") then
             title = filename .. " [tv]"
         elseif path_lower:match("[/\\]movies?[/\\]") then
             title = filename .. " [movie]"
