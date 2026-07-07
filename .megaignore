@@ -1,2 +1,3 @@
 -d:cache
 -d:watch_later
++:.megaignore
