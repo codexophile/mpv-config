@@ -1,4 +1,3 @@
-local utils = require 'mp.utils'
 local options = require 'mp.options'
 local assdraw = require 'mp.assdraw'
 
@@ -14,12 +13,23 @@ local opts = {
 }
 options.read_options(opts)
 
+local function format_time(seconds)
+    local safe_seconds = math.max(0, math.floor(seconds or 0))
+    local hours = math.floor(safe_seconds / 3600)
+    local minutes = math.floor((safe_seconds % 3600) / 60)
+    local secs = safe_seconds % 60
+    return string.format("%02d:%02d:%02d", hours, minutes, secs)
+end
+
 function get_current_chapter_title()
     local chapter_list = mp.get_property_native("chapter-list")
     local current_chapter = mp.get_property_number("chapter")
-    
+
     if chapter_list and current_chapter ~= nil and #chapter_list > 0 then
-        -- Always show "Chapter X" since we can see the titles are empty
+        local chapter_info = chapter_list[current_chapter + 1]
+        if chapter_info and chapter_info.title and chapter_info.title ~= "" then
+            return string.format("Chapter %d: %s", current_chapter + 1, chapter_info.title)
+        end
         return string.format("Chapter %d / %d", current_chapter + 1, #chapter_list)
     end
     return ""
@@ -34,18 +44,11 @@ function get_remaining_time()
     local duration = mp.get_property_number("duration", 0)
     local position = mp.get_property_number("time-pos", 0)
     local speed = mp.get_property_number("speed", 1)
-    
-    local remaining_time = duration - position
-    local apparent_remaining_time = remaining_time / speed
-    
-    local function format_time(seconds)
-        local hours = math.floor(seconds / 3600)
-        local minutes = math.floor((seconds % 3600) / 60)
-        local secs = math.floor(seconds % 60)
-        return string.format("%02d:%02d:%02d", hours, minutes, secs)
-    end
-    
-    return string.format("%s | %s", 
+
+    local remaining_time = math.max(0, duration - position)
+    local apparent_remaining_time = speed > 0 and remaining_time / speed or 0
+
+    return string.format("%s | %s",
         format_time(remaining_time),
         format_time(apparent_remaining_time))
 end
@@ -57,14 +60,6 @@ end
 
 function get_elapsed_time()
     local position = mp.get_property_number("time-pos", 0)
-
-    local function format_time(seconds)
-        local hours = math.floor(seconds / 3600)
-        local minutes = math.floor((seconds % 3600) / 60)
-        local secs = math.floor(seconds % 60)
-        return string.format("%02d:%02d:%02d", hours, minutes, secs)
-    end
-
     return format_time(position)
 end
 
@@ -72,23 +67,23 @@ function get_video_dimensions()
     -- Get native video dimensions
     local video_w = mp.get_property_number("video-params/w", 0)
     local video_h = mp.get_property_number("video-params/h", 0)
-    
+
     -- Get current window dimensions from osd-dimensions
     local osd_dim = mp.get_property_native("osd-dimensions")
     if not osd_dim then return "N/A" end
-    
+
     local window_w = osd_dim.w
     local window_h = osd_dim.h
-    
+
     -- Avoid division by zero
     if video_w == 0 or video_h == 0 then return "N/A" end
-    
+
     -- Calculate scaling percentage
     local scale_w = (window_w / video_w) * 100
     local scale_h = (window_h / video_h) * 100
-    
+
     -- Format the dimensions string
-    return string.format("%dx%d → %dx%d (%.1f%%)", 
+    return string.format("%dx%d → %dx%d (%.1f%%)",
         video_w, video_h,
         math.floor(window_w), math.floor(window_h),
         (scale_w + scale_h) / 2)  -- Average scale percentage
@@ -105,57 +100,42 @@ function create_ass_header(alignment)
     )
 end
 
+function draw_line(ass, w, y, text)
+    ass:new_event()
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, y)
+    ass:append(text)
+end
+
 function draw_elements()
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
-    -- Layout: place multiple lines stacked from bottom up
     local base_y = h - opts.margin_y
     local line_h = opts.font_size + 6
 
-    -- Draw video dimensions (topmost of this block)
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, base_y - line_h * 5)
-    ass:append(get_video_dimensions())
+    local lines = {
+        get_video_dimensions(),
+        get_frame_rate(),
+        get_playback_percentage(),
+        get_elapsed_time(),
+        get_remaining_time(),
+    }
 
-    -- Draw frame rate
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, base_y - line_h * 4)
-    ass:append(get_frame_rate())
+    for index, text in ipairs(lines) do
+        local y = base_y - line_h * (6 - index)
+        draw_line(ass, w, y, text)
+    end
 
-    -- Draw elapsed time (below frame rate)
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, base_y - line_h * 3)
-    ass:append(get_elapsed_time())
-
-    -- Draw percentage
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, base_y - line_h * 2)
-    ass:append(get_playback_percentage())
-
-    -- Draw remaining time
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, base_y - line_h)
-    ass:append(get_remaining_time())
-    
-    -- Draw chapter number
     local chapter_text = get_current_chapter_title()
     if chapter_text ~= "" then
-        ass:new_event()
-        ass:append(create_ass_header(3))
-        ass:pos(w - opts.margin_x, h - opts.margin_y)
-        ass:append(chapter_text)
+        draw_line(ass, w, h - opts.margin_y, chapter_text)
     end
-    
+
     mp.set_osd_ass(w, h, ass.text)
 end
 
 -- Update more frequently to ensure chapter info is always visible
-mp.observe_property("chapter", "number", function(_, current_chapter)
+mp.observe_property("chapter", "number", function(_, _)
     draw_elements()
 end)
 mp.observe_property("estimated-vf-fps", "number", draw_elements)
