@@ -55,6 +55,19 @@ function get_frame_rate()
     return string.format("%.1f FPS", fps)
 end
 
+function get_elapsed_time()
+    local position = mp.get_property_number("time-pos", 0)
+
+    local function format_time(seconds)
+        local hours = math.floor(seconds / 3600)
+        local minutes = math.floor((seconds % 3600) / 60)
+        local secs = math.floor(seconds % 60)
+        return string.format("%02d:%02d:%02d", hours, minutes, secs)
+    end
+
+    return format_time(position)
+end
+
 function get_video_dimensions()
     -- Get native video dimensions
     local video_w = mp.get_property_number("video-params/w", 0)
@@ -95,29 +108,38 @@ end
 function draw_elements()
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
-    
-    -- Draw video dimensions
+    -- Layout: place multiple lines stacked from bottom up
+    local base_y = h - opts.margin_y
+    local line_h = opts.font_size + 6
+
+    -- Draw video dimensions (topmost of this block)
     ass:new_event()
     ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 4 - 20)
+    ass:pos(w - opts.margin_x, base_y - line_h * 5)
     ass:append(get_video_dimensions())
-    
-    -- Draw percentage
-    ass:new_event()
-    ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 2 - 10)
-    ass:append(get_playback_percentage())
 
     -- Draw frame rate
     ass:new_event()
     ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size * 3 - 15)
+    ass:pos(w - opts.margin_x, base_y - line_h * 4)
     ass:append(get_frame_rate())
-    
+
+    -- Draw elapsed time (below frame rate)
+    ass:new_event()
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, base_y - line_h * 3)
+    ass:append(get_elapsed_time())
+
+    -- Draw percentage
+    ass:new_event()
+    ass:append(create_ass_header(3))
+    ass:pos(w - opts.margin_x, base_y - line_h * 2)
+    ass:append(get_playback_percentage())
+
     -- Draw remaining time
     ass:new_event()
     ass:append(create_ass_header(3))
-    ass:pos(w - opts.margin_x, h - opts.margin_y - opts.font_size - 5)
+    ass:pos(w - opts.margin_x, base_y - line_h)
     ass:append(get_remaining_time())
     
     -- Draw chapter number
