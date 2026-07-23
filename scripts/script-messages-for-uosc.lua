@@ -44,6 +44,15 @@ local function launch_assistant(action)
   end
 end
 
+local function test()
+  local test_string = "(gentle music continues)"
+  local pattern = '^%(.+%)$'
+  local is_match = string.match(test_string, pattern) ~= nil
+  mp.osd_message(tostring(is_match))
+end
+
+mp.register_script_message("test", test)
+
 mp.register_script_message("open-in-imdb", function()
   launch_assistant("--open-in-imdb")
 end)
