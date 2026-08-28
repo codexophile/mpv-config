@@ -23,6 +23,10 @@ local current_playtime_path = nil
 local total_seconds = 0  -- accumulated seconds for the current file (committed)
 local segment_start = nil -- mp.get_time() timestamp of current unpaused run, or nil
 local save_timer = nil
+-- Other scripts can read this with:
+-- mp.get_property_number("user-data/playtime-tracker-seconds", 0)
+local PLAYTIME_PROPERTY = "user-data/playtime-tracker/seconds"
+local PLAYTIME_FILE_PROPERTY = "user-data/playtime-tracker/file"
 
 local function read_file(path)
     local file = io.open(path, "rb")
@@ -49,13 +53,18 @@ end
 
 local function load_playtime(path)
     local content = read_file(path)
-    if not content then return 0 end
-
-    local value = tonumber(content)
-    if not value or value < 0 then
-        msg.warn("could not parse " .. path .. ", starting at zero")
+    if not content then
+        msg.debug("load_playtime: file not found at " .. path)
         return 0
     end
+
+    local trimmed = content:gsub("^%s+|%s+$", "")
+    local value = tonumber(trimmed)
+    if not value or value < 0 then
+        msg.warn("could not parse " .. path .. ", content='" .. tostring(trimmed) .. "', starting at zero")
+        return 0
+    end
+    msg.debug("load_playtime: " .. path .. " -> " .. tostring(value))
     return value
 end
 
@@ -72,13 +81,24 @@ local function live_total()
     return t
 end
 
+local function publish_playtime()
+    mp.set_property(PLAYTIME_PROPERTY, string.format("%.3f", live_total()))
+    mp.set_property(PLAYTIME_FILE_PROPERTY, current_key or "")
+end
+
 -- Build a stable identity string for the currently loaded file.
 local function file_key()
     local path = mp.get_property("path")
-    if not path then return nil end
+    if not path then
+        msg.debug("file_key: no path property")
+        return nil
+    end
+
+    msg.debug("file_key: raw path = " .. path)
 
     -- Leave URLs / protocol paths (http://, dvd://, etc.) alone.
     if path:find("^%a[%a%d+.-]*://") then
+        msg.debug("file_key: URL, returning as-is")
         return path
     end
 
@@ -87,9 +107,13 @@ local function file_key()
     -- opened from.
     if not path:find("^%a:[\\/]") and not path:find("^[\\/]") then
         local wd = mp.get_property("working-directory")
+        msg.debug("file_key: relative path, wd = " .. tostring(wd))
         if wd then
             path = utils.join_path(wd, path)
+            msg.debug("file_key: normalized to " .. path)
         end
+    else
+        msg.debug("file_key: already absolute")
     end
     return path
 end
@@ -128,6 +152,7 @@ local function start_save_timer()
         if current_playtime_path then
             save_playtime(current_playtime_path, live_total())
         end
+        publish_playtime()
     end)
 end
 
@@ -138,6 +163,7 @@ local function on_pause_change(_, paused)
     else
         open_segment()
     end
+    publish_playtime()
 end
 
 local function finalize_current_file()
@@ -146,6 +172,7 @@ local function finalize_current_file()
     current_key = nil
     current_playtime_path = nil
     total_seconds = 0
+    publish_playtime()
 end
 
 local function on_start_file()
@@ -156,15 +183,22 @@ end
 
 local function on_file_loaded()
     current_key = file_key()
-    if not current_key then return end
+    if not current_key then
+        msg.debug("on_file_loaded: no current_key")
+        return
+    end
+
+    msg.debug("on_file_loaded: key = " .. current_key)
 
     -- URLs have no local parent folder, so they are tracked for this session
     -- only. Local media uses the requested sibling sidecar file.
     if current_key:find("^%a[%a%d+.-]*://") then
         current_playtime_path = nil
         total_seconds = 0
+        msg.debug("on_file_loaded: URL detected, no persistence")
     else
         current_playtime_path = current_key .. ".playtime"
+        msg.debug("on_file_loaded: sidecar path = " .. current_playtime_path)
         total_seconds = load_playtime(current_playtime_path)
     end
 
@@ -174,6 +208,8 @@ local function on_file_loaded()
         segment_start = mp.get_time()
     end
 
+    msg.debug("File loaded: key=" .. tostring(current_key) .. " playtime=" .. tostring(total_seconds))
+    publish_playtime()
     start_save_timer()
 end
 
@@ -193,6 +229,11 @@ mp.register_event("end-file", on_end_file)
 mp.register_event("shutdown", on_shutdown)
 mp.observe_property("pause", "bool", on_pause_change)
 
+-- Initialize properties at script startup
+mp.set_property(PLAYTIME_PROPERTY, "0")
+mp.set_property(PLAYTIME_FILE_PROPERTY, "")
+msg.debug("playtime-tracker initialized")
+
 -- Optional: bind a key to show the current file's tracked playtime as OSD.
 -- Remove this if you don't want it, or rebind via input.conf instead:
 --   script-message playtime-tracker-show
@@ -202,4 +243,19 @@ mp.register_script_message("playtime-tracker-show", function()
     local m = math.floor((t % 3600) / 60)
     local s = math.floor(t % 60)
     mp.osd_message(string.format("Playtime this file: %02d:%02d:%02d", h, m, s))
+end)
+mp.register_script_message("playtime-tracker-get", function()
+    publish_playtime()
+end)
+
+mp.register_script_message("playtime-tracker-debug", function()
+    local file_prop = mp.get_property(PLAYTIME_FILE_PROPERTY, "")
+    local seconds_prop = mp.get_property(PLAYTIME_PROPERTY, "0")
+    local loaded_path = mp.get_property("path", "?")
+    local loaded_wd = mp.get_property("working-directory", "?")
+    
+    mp.osd_message(string.format(
+        "FILE: %s | TRACKED_KEY: %s | TRACKED_SECS: %s | LIVE_KEY: %s | LIVE_SECS: %s | WD: %s",
+        loaded_path, file_prop, seconds_prop, tostring(current_key), tostring(total_seconds), loaded_wd
+    ))
 end)
