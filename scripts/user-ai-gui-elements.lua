@@ -22,6 +22,12 @@ local function format_time(seconds)
     return string.format("%02d:%02d:%02d", hours, minutes, secs)
 end
 
+local function format_signed_time(seconds)
+    local safe_seconds = math.floor(seconds or 0)
+    local emoji = safe_seconds < 0 and "➖" or "➕"
+    return emoji .. " " .. format_time(math.abs(safe_seconds))
+end
+
 function get_current_chapter_title()
     local chapter_list = mp.get_property_native("chapter-list")
     local current_chapter = mp.get_property_number("chapter")
@@ -137,7 +143,7 @@ function draw_elements()
         get_video_dimensions(),
         get_frame_rate(),
         "⌚ " .. format_time(get_playtime_tracker()),
-        "➕➖ " .. format_time(get_time_saved_so_far()),
+        format_signed_time(get_time_saved_so_far()),
         get_elapsed_time() .. " " .. get_playback_percentage(),
         get_remaining_time()
     }
