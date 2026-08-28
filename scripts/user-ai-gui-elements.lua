@@ -91,6 +91,8 @@ function get_video_dimensions()
 end
 
 function get_playtime_tracker()
+    mp.commandv("script-message", "playtime-tracker-get")
+
     local seconds = mp.get_property_native("user-data/playtime-tracker/seconds", 0)
     local seconds_num = tonumber(seconds) 
     local seconds_int = math.floor((seconds_num)+0.5)
@@ -125,7 +127,6 @@ function draw_line(ass, w, y, text)
 end
 
 function draw_elements()
-    mp.commandv("script-message", "playtime-tracker-get")
 
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
