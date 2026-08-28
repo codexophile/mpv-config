@@ -44,14 +44,18 @@ local function launch_assistant(action)
   end
 end
 
-local function test()
-  local test_string = "(gentle music continues)"
-  local pattern = '^%(.+%)$'
-  local is_match = string.match(test_string, pattern) ~= nil
-  mp.osd_message(tostring(is_match))
+local function show_playtime()
+  mp.commandv("script-message", "playtime-tracker-get")
+
+  local seconds = mp.get_property_number(
+    "user-data/playtime-tracker-seconds",
+    0
+  )
+
+  mp.osd_message(string.format("Playtime: %.3f seconds", seconds))
 end
 
-mp.register_script_message("test", test)
+mp.register_script_message("uosc-test", show_playtime)
 
 mp.register_script_message("open-in-imdb", function()
   launch_assistant("--open-in-imdb")
