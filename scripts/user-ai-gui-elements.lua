@@ -1,5 +1,6 @@
 local options = require 'mp.options'
 local assdraw = require 'mp.assdraw'
+local msg = require 'mp.msg'
 
 -- Script options
 local opts = {
@@ -89,6 +90,14 @@ function get_video_dimensions()
         (scale_w + scale_h) / 2)  -- Average scale percentage
 end
 
+function get_playtime_tracker_formatted()
+    mp.commandv("script-message", "playtime-tracker-get")
+    local seconds = mp.get_property_native("user-data/playtime-tracker/seconds", 0)
+    local seconds_num = tonumber(seconds) 
+    local seconds_int = math.floor((seconds_num)+0.5)
+    return string.format("Playtime: %s", format_time(seconds_int))
+end
+
 function create_ass_header(alignment)
     return string.format(
         "{\\a%d\\fs%d\\1c&H%s\\b1\\bord2\\3c&H%s\\3a&H%s}",
@@ -117,6 +126,7 @@ function draw_elements()
         get_video_dimensions(),
         get_frame_rate(),
         get_playback_percentage(),
+        get_playtime_tracker_formatted(),
         get_elapsed_time(),
         get_remaining_time(),
     }
