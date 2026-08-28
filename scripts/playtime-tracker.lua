@@ -13,10 +13,6 @@
 -- Install: save this file to your mpv "scripts" folder, e.g.
 --   %APPDATA%\mpv\scripts\playtime-tracker.lua
 
-if mp.get_opt("playtime-tracker-enabled") ~= "yes" then
-    return  -- bail out immediately, rest of the file never runs
-end
-
 local utils = require 'mp.utils'
 local msg = require 'mp.msg'
 
@@ -227,39 +223,50 @@ local function on_shutdown()
     finalize_current_file()
 end
 
-mp.register_event("start-file", on_start_file)
-mp.register_event("file-loaded", on_file_loaded)
-mp.register_event("end-file", on_end_file)
-mp.register_event("shutdown", on_shutdown)
-mp.observe_property("pause", "bool", on_pause_change)
+mp.register_event("file-loaded", function()
+  
+  --! wrapping this in file-loaded event to ensure that the script-opts are 
+  --! fully loaded before checking the option
+  local enabled = mp.get_opt("playtime-tracker-enabled")
+  if enabled ~= "yes" then
+    return  -- bail out immediately, rest of the file never runs
+  end
 
--- Initialize properties at script startup
-mp.set_property(PLAYTIME_PROPERTY, "0")
-mp.set_property(PLAYTIME_FILE_PROPERTY, "")
-msg.debug("playtime-tracker initialized")
+  mp.register_event("start-file", on_start_file)
+  mp.register_event("file-loaded", on_file_loaded)
+  mp.register_event("end-file", on_end_file)
+  mp.register_event("shutdown", on_shutdown)
+  mp.observe_property("pause", "bool", on_pause_change)
 
--- Optional: bind a key to show the current file's tracked playtime as OSD.
--- Remove this if you don't want it, or rebind via input.conf instead:
---   script-message playtime-tracker-show
-mp.register_script_message("playtime-tracker-show", function()
-    local t = live_total()
-    local h = math.floor(t / 3600)
-    local m = math.floor((t % 3600) / 60)
-    local s = math.floor(t % 60)
-    mp.osd_message(string.format("Playtime this file: %02d:%02d:%02d", h, m, s))
-end)
-mp.register_script_message("playtime-tracker-get", function()
-    publish_playtime()
-end)
+  -- Initialize properties at script startup
+  mp.set_property(PLAYTIME_PROPERTY, "0")
+  mp.set_property(PLAYTIME_FILE_PROPERTY, "")
+  msg.debug("playtime-tracker initialized")
 
-mp.register_script_message("playtime-tracker-debug", function()
-    local file_prop = mp.get_property(PLAYTIME_FILE_PROPERTY, "")
-    local seconds_prop = mp.get_property(PLAYTIME_PROPERTY, "0")
-    local loaded_path = mp.get_property("path", "?")
-    local loaded_wd = mp.get_property("working-directory", "?")
-    
-    mp.osd_message(string.format(
-        "FILE: %s | TRACKED_KEY: %s | TRACKED_SECS: %s | LIVE_KEY: %s | LIVE_SECS: %s | WD: %s",
-        loaded_path, file_prop, seconds_prop, tostring(current_key), tostring(total_seconds), loaded_wd
-    ))
+  -- Optional: bind a key to show the current file's tracked playtime as OSD.
+  -- Remove this if you don't want it, or rebind via input.conf instead:
+  --   script-message playtime-tracker-show
+  mp.register_script_message("playtime-tracker-show", function()
+      local t = live_total()
+      local h = math.floor(t / 3600)
+      local m = math.floor((t % 3600) / 60)
+      local s = math.floor(t % 60)
+      mp.osd_message(string.format("Playtime this file: %02d:%02d:%02d", h, m, s))
+  end)
+  mp.register_script_message("playtime-tracker-get", function()
+      publish_playtime()
+  end)
+
+  mp.register_script_message("playtime-tracker-debug", function()
+      local file_prop = mp.get_property(PLAYTIME_FILE_PROPERTY, "")
+      local seconds_prop = mp.get_property(PLAYTIME_PROPERTY, "0")
+      local loaded_path = mp.get_property("path", "?")
+      local loaded_wd = mp.get_property("working-directory", "?")
+      
+      mp.osd_message(string.format(
+          "FILE: %s | TRACKED_KEY: %s | TRACKED_SECS: %s | LIVE_KEY: %s | LIVE_SECS: %s | WD: %s",
+          loaded_path, file_prop, seconds_prop, tostring(current_key), tostring(total_seconds), loaded_wd
+      ))
+  end)
+
 end)
