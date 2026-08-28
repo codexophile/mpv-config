@@ -7,8 +7,8 @@
 -- re-watching sections simply keeps adding real time; there is no
 -- deduplication by media position.
 --
--- Data is stored as JSON at: <mpv config dir>/playtime.json
--- (on Windows, typically: %APPDATA%\mpv\playtime.json)
+-- For local files, data is stored as a numeric sidecar next to the media:
+--   media-file-name.mp4.playtime
 --
 -- Install: save this file to your mpv "scripts" folder, e.g.
 --   %APPDATA%\mpv\scripts\playtime-tracker.lua
@@ -18,16 +18,11 @@ local msg = require 'mp.msg'
 
 local SAVE_INTERVAL = 10 -- seconds; periodic safety-save while playing
 
-local db = {}            -- key(path) -> accumulated seconds (persisted)
-local db_path = nil
 local current_key = nil
+local current_playtime_path = nil
 local total_seconds = 0  -- accumulated seconds for the current file (committed)
 local segment_start = nil -- mp.get_time() timestamp of current unpaused run, or nil
 local save_timer = nil
-
-local function expand_path(p)
-    return mp.command_native({"expand-path", p})
-end
 
 local function read_file(path)
     local file = io.open(path, "rb")
@@ -40,37 +35,32 @@ end
 local function write_file(path, content)
     local file, err = io.open(path, "wb")
     if not file then
-        msg.warn("failed to open playtime.json for writing: " .. tostring(err))
+        msg.warn("failed to open " .. path .. " for writing: " .. tostring(err))
         return false
     end
     local ok, write_err = file:write(content)
     file:close()
     if not ok then
-        msg.warn("failed to write playtime.json: " .. tostring(write_err))
+        msg.warn("failed to write " .. path .. ": " .. tostring(write_err))
         return false
     end
     return true
 end
 
-local function load_db()
-    local content = read_file(db_path)
-    if content then
-        local ok, parsed = pcall(utils.parse_json, content)
-        if ok and type(parsed) == "table" then
-            db = parsed
-        else
-            msg.warn("could not parse playtime.json, starting fresh")
-        end
+local function load_playtime(path)
+    local content = read_file(path)
+    if not content then return 0 end
+
+    local value = tonumber(content)
+    if not value or value < 0 then
+        msg.warn("could not parse " .. path .. ", starting at zero")
+        return 0
     end
+    return value
 end
 
-local function save_db()
-    local ok, encoded = pcall(utils.format_json, db)
-    if ok and encoded then
-        write_file(db_path, encoded)
-    else
-        msg.warn("failed to encode playtime db")
-    end
+local function save_playtime(path, seconds)
+    write_file(path, string.format("%.3f\n", seconds))
 end
 
 -- Live total for the current file, without mutating total_seconds.
@@ -119,12 +109,10 @@ local function open_segment()
     end
 end
 
--- Write current file's total into the db table (in-memory) and persist.
 local function commit_and_save()
-    if current_key then
-        db[current_key] = total_seconds
+    if current_playtime_path then
+        save_playtime(current_playtime_path, total_seconds)
     end
-    save_db()
 end
 
 local function stop_save_timer()
@@ -137,9 +125,8 @@ end
 local function start_save_timer()
     stop_save_timer()
     save_timer = mp.add_periodic_timer(SAVE_INTERVAL, function()
-        if current_key then
-            db[current_key] = live_total()
-            save_db()
+        if current_playtime_path then
+            save_playtime(current_playtime_path, live_total())
         end
     end)
 end
@@ -147,10 +134,7 @@ end
 local function on_pause_change(_, paused)
     if paused then
         close_segment()
-        if current_key then
-            db[current_key] = total_seconds
-            save_db()
-        end
+        commit_and_save()
     else
         open_segment()
     end
@@ -158,11 +142,9 @@ end
 
 local function finalize_current_file()
     close_segment()
-    if current_key then
-        db[current_key] = total_seconds
-        save_db()
-    end
+    commit_and_save()
     current_key = nil
+    current_playtime_path = nil
     total_seconds = 0
 end
 
@@ -176,7 +158,15 @@ local function on_file_loaded()
     current_key = file_key()
     if not current_key then return end
 
-    total_seconds = tonumber(db[current_key]) or 0
+    -- URLs have no local parent folder, so they are tracked for this session
+    -- only. Local media uses the requested sibling sidecar file.
+    if current_key:find("^%a[%a%d+.-]*://") then
+        current_playtime_path = nil
+        total_seconds = 0
+    else
+        current_playtime_path = current_key .. ".playtime"
+        total_seconds = load_playtime(current_playtime_path)
+    end
 
     if mp.get_property_native("pause") then
         segment_start = nil
@@ -196,11 +186,6 @@ local function on_shutdown()
     stop_save_timer()
     finalize_current_file()
 end
-
--- Init
-local config_dir = expand_path("~~/")
-db_path = utils.join_path(config_dir, "playtime.json")
-load_db()
 
 mp.register_event("start-file", on_start_file)
 mp.register_event("file-loaded", on_file_loaded)
