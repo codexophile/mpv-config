@@ -135,11 +135,10 @@ function draw_elements()
     local lines = {
         get_video_dimensions(),
         get_frame_rate(),
-        get_playback_percentage(),
-        string.format("Playtime: %s", format_time(get_playtime_tracker())),
-        string.format("Time saved: %s", format_time(get_time_saved_so_far())),
-        "Elapsed:" .. get_elapsed_time(),
-        "Remaining: " .. get_remaining_time()
+        "⌚ " .. format_time(get_playtime_tracker()),
+        "🛟 " .. format_time(get_time_saved_so_far()),
+        get_elapsed_time() .. " " .. get_playback_percentage(),
+        get_remaining_time()
     }
 
     local chapter_title = get_current_chapter_title()
