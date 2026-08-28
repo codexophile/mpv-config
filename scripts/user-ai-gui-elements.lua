@@ -90,12 +90,20 @@ function get_video_dimensions()
         (scale_w + scale_h) / 2)  -- Average scale percentage
 end
 
-function get_playtime_tracker_formatted()
-    mp.commandv("script-message", "playtime-tracker-get")
+function get_playtime_tracker()
     local seconds = mp.get_property_native("user-data/playtime-tracker/seconds", 0)
     local seconds_num = tonumber(seconds) 
     local seconds_int = math.floor((seconds_num)+0.5)
-    return string.format("Playtime: %s", format_time(seconds_int))
+    return seconds_int 
+end
+
+function get_time_saved_so_far()
+  local current_time = mp.get_property_number("time-pos", 0)
+  local current_time_num = tonumber(current_time)
+  local current_time_int = math.floor((current_time_num)+0.5)
+  local current_play_time = get_playtime_tracker()
+  local time_saved = current_time_int - current_play_time
+  return time_saved
 end
 
 function create_ass_header(alignment)
@@ -117,6 +125,8 @@ function draw_line(ass, w, y, text)
 end
 
 function draw_elements()
+    mp.commandv("script-message", "playtime-tracker-get")
+
     local ass = assdraw.ass_new()
     local w, h = mp.get_osd_size()
     local base_y = h - opts.margin_y
@@ -126,9 +136,10 @@ function draw_elements()
         get_video_dimensions(),
         get_frame_rate(),
         get_playback_percentage(),
-        get_playtime_tracker_formatted(),
-        get_elapsed_time(),
-        get_remaining_time(),
+        string.format("Playtime: %s", format_time(get_playtime_tracker())),
+        string.format("Time saved: %s", format_time(get_time_saved_so_far())),
+        "Elapsed:" .. get_elapsed_time(),
+        "Remaining: " .. get_remaining_time(),
         get_current_chapter_title()
     }
 
