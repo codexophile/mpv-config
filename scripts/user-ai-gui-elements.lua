@@ -139,19 +139,22 @@ function draw_elements()
         string.format("Playtime: %s", format_time(get_playtime_tracker())),
         string.format("Time saved: %s", format_time(get_time_saved_so_far())),
         "Elapsed:" .. get_elapsed_time(),
-        "Remaining: " .. get_remaining_time(),
-        get_current_chapter_title()
+        "Remaining: " .. get_remaining_time()
     }
 
-    for index, text in ipairs(lines) do
-        local y = base_y - line_h * (6 - index)
-        draw_line(ass, w, y, text)
+    local chapter_title = get_current_chapter_title()
+    if chapter_title ~= "" then
+        table.insert(lines, chapter_title)
     end
 
-    -- local chapter_text = get_current_chapter_title()
-    -- if chapter_text ~= "" then
-    --     draw_line(ass, w, h - opts.margin_y, chapter_text)
-    -- end
+    local line_count = #lines
+    for index, text in ipairs(lines) do
+        local y = math.max(
+            opts.margin_y + opts.font_size,
+            base_y - line_h * (line_count - index)
+        )
+        draw_line(ass, w, y, text)
+    end
 
     mp.set_osd_ass(w, h, ass.text)
 end
