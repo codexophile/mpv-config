@@ -129,6 +129,7 @@ function draw_elements()
         get_playtime_tracker_formatted(),
         get_elapsed_time(),
         get_remaining_time(),
+        get_current_chapter_title()
     }
 
     for index, text in ipairs(lines) do
@@ -136,10 +137,10 @@ function draw_elements()
         draw_line(ass, w, y, text)
     end
 
-    local chapter_text = get_current_chapter_title()
-    if chapter_text ~= "" then
-        draw_line(ass, w, h - opts.margin_y, chapter_text)
-    end
+    -- local chapter_text = get_current_chapter_title()
+    -- if chapter_text ~= "" then
+    --     draw_line(ass, w, h - opts.margin_y, chapter_text)
+    -- end
 
     mp.set_osd_ass(w, h, ass.text)
 end
