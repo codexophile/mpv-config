@@ -13,6 +13,10 @@
 -- Install: save this file to your mpv "scripts" folder, e.g.
 --   %APPDATA%\mpv\scripts\playtime-tracker.lua
 
+if mp.get_opt("playtime-tracker-enabled") ~= "yes" then
+    return  -- bail out immediately, rest of the file never runs
+end
+
 local utils = require 'mp.utils'
 local msg = require 'mp.msg'
 
