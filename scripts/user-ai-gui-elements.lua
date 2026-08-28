@@ -137,7 +137,7 @@ function draw_elements()
         get_video_dimensions(),
         get_frame_rate(),
         "⌚ " .. format_time(get_playtime_tracker()),
-        "🛟 " .. format_time(get_time_saved_so_far()),
+        "➕➖ " .. format_time(get_time_saved_so_far()),
         get_elapsed_time() .. " " .. get_playback_percentage(),
         get_remaining_time()
     }
