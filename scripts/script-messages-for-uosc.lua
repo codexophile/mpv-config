@@ -45,14 +45,43 @@ local function launch_assistant(action)
 end
 
 local function show_playtime()
+  -- Request tracker to publish current values
   mp.commandv("script-message", "playtime-tracker-get")
+  
+  -- Add delay to ensure property is updated
+  mp.add_timeout(0.05, function()
+    local seconds = mp.get_property(
+      "user-data/playtime-tracker/seconds",
+      -1
+    )
+    local current_file = mp.get_property("path", "")
 
-  local seconds = mp.get_property_number(
-    "user-data/playtime-tracker-seconds",
-    0
-  )
-
-  mp.osd_message(string.format("Playtime: %.3f seconds", seconds))
+    mp.osd_message("Playtime for current file: " .. tostring(seconds) .. " seconds")
+    -- return
+    
+    -- if not current_file or current_file == "" then
+    --   mp.osd_message("No file loaded")
+    --   return
+    -- end
+    
+    -- if seconds < 0 then
+    --   mp.osd_message("Playtime property not found")
+    --   return
+    -- end
+    
+    -- if seconds > 0 then
+    --   local hours = math.floor(seconds / 3600)
+    --   local mins = math.floor((seconds % 3600) / 60)
+    --   local secs = math.floor(seconds % 60)
+    --   if hours > 0 then
+    --     mp.osd_message(string.format("Playtime: %02d:%02d:%02d", hours, mins, secs))
+    --   else
+    --     mp.osd_message(string.format("Playtime: %02d:%02d", mins, secs))
+    --   end
+    -- else
+    --   mp.osd_message("New file - no playtime yet")
+    -- end
+  end)
 end
 
 mp.register_script_message("uosc-test", show_playtime)
