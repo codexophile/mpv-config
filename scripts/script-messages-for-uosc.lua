@@ -12,11 +12,17 @@ local function get_loaded_filename()
   return filename
 end
 
-local function launch_assistant(action)
+local function launch_assistant(action, full_path)
   local filename = get_loaded_filename()
 
   if not filename then
     return
+  end
+
+  local file_argument = filename
+  if full_path then
+    local path = mp.get_property("path")
+    file_argument = path and path ~= "" and path or filename
   end
 
   local cmd = {
@@ -32,7 +38,7 @@ local function launch_assistant(action)
       ahkPath,
       scriptPath,
       action,
-      "--file-name:" .. filename,
+      "--file-name:" .. file_argument,
     },
   }
 
@@ -48,6 +54,10 @@ local function show_playtime()
  local var = mp.get_opt("playtime-tracker-enabled")
  mp.osd_message("playtime-tracker-enabled: " .. tostring(var))
 end
+
+mp.register_script_message("tag", function()
+  launch_assistant("--tag", true)
+end)
 
 mp.register_script_message("uosc-test", show_playtime)
 
