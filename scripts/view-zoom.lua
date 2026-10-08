@@ -8,7 +8,8 @@
 ---   viewzoom/reset
 ---
 --- Defaults: Ctrl+0 toggle, Ctrl+= / Ctrl+- zoom, Alt+arrows pan,
---- Ctrl+drag pans, Ctrl+wheel zooms toward the cursor.
+--- left-drag pans while zoomed, Ctrl+drag remains supported, and Ctrl+wheel
+--- zooms toward the cursor.
 
 local mp = require("mp")
 local options = require("mp.options")
@@ -149,7 +150,7 @@ local function toggle()
     show_osd()
 end
 
--- Mouse drag panning (Ctrl + left button) ------------------------------------
+-- Mouse drag panning ----------------------------------------------------------
 
 ---@type {x:number, y:number}|nil
 local drag_last = nil
@@ -163,14 +164,18 @@ mp.observe_property("mouse-pos", "native", function(_, m)
     pan_by(dx / g.W, dy / g.H)
 end)
 
-mp.add_key_binding("Ctrl+MBTN_LEFT", "pan-drag", function(e)
+local function handle_drag(e)
     if e.event == "down" then
+        if mp.get_property_number("video-zoom", 0) <= 0 then return end
         local m = mp.get_property_native("mouse-pos")
         if m then drag_last = { x = m.x, y = m.y } end
     elseif e.event == "up" then
         drag_last = nil
     end
-end, { complex = true })
+end
+
+mp.add_key_binding("MBTN_LEFT", "pan-drag", handle_drag, { complex = true })
+mp.add_key_binding("Ctrl+MBTN_LEFT", "pan-drag-ctrl", handle_drag, { complex = true })
 
 -- Script messages ---------------------------------------------------------------
 -- Invoke with: script-message-to viewzoom <name> [optional-number]
