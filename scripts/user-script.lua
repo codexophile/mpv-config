@@ -185,28 +185,6 @@ function delete_current_file()
     end
 end
 
-function on_file_loaded()
-    local path = mp.get_property("path")
-    if path then
-        local filename = mp.get_property("filename")
-        local title = filename
-        
-        -- Convert path to lowercase for case-insensitive matching
-        local path_lower = path:lower()
-        
-        -- Check if path contains 'tv' or 'movies' folder
-        if path_lower:match("[WwXx]:") then
-            title = filename .. " [w]"
-        elseif path_lower:match("[/\\]tv[/\\]") then
-            title = filename .. " [tv]"
-        elseif path_lower:match("[/\\]movies?[/\\]") then
-            title = filename .. " [movie]"
-        end
-        
-        mp.set_property("title", title .. " - mpv")
-    end
-end
-
 function take_custom_screenshot()
     local video_path = mp.get_property("path")
     local video_directory = utils.split_path(video_path)
@@ -255,7 +233,7 @@ function resize_to_video()
     end
 end
 
-mp.register_event("file-loaded", on_file_loaded)
+-- mp.register_event("file-loaded", on_file_loaded)
 
 mp.add_key_binding(nil, "take-custom-screenshot", take_custom_screenshot)
 mp.add_key_binding("KP_DEL", "delete_current_file", delete_current_file)
