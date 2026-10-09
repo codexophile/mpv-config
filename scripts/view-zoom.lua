@@ -8,7 +8,7 @@
 ---   viewzoom/reset
 ---
 --- Defaults: Ctrl+0 toggle, Ctrl+= / Ctrl+- zoom, Alt+arrows pan,
---- left-drag pans while zoomed, Ctrl+drag remains supported, and Ctrl+wheel
+--- right-drag pans while zoomed, Ctrl+left-drag remains supported, and Ctrl+wheel
 --- zooms toward the cursor.
 
 local mp = require("mp")
@@ -174,8 +174,8 @@ local function handle_drag(e)
     end
 end
 
-mp.add_key_binding("MBTN_LEFT", "pan-drag", handle_drag, { complex = true })
 mp.add_key_binding("Ctrl+MBTN_LEFT", "pan-drag-ctrl", handle_drag, { complex = true })
+mp.add_key_binding("MBTN_RIGHT", "pan-drag-right", handle_drag, { complex = true })
 
 -- Script messages ---------------------------------------------------------------
 -- Invoke with: script-message-to viewzoom <name> [optional-number]
